@@ -1,0 +1,19 @@
+---
+- name: Configure
+  hosts: localhost
+  become: true
+  tasks:
+  - name: Test ansible scripts
+    debug:
+      msg:
+         - "{{ inventory_hostname }}"
+  - name: Update the packages
+    command: apt update
+  - name: Install docker
+    command: apt install docker.io=17.12.1-0ubuntu1
+    #command: apt install docker.io -y
+  - name: Do sudoless docker commands
+    command: usermod -aG docker $(whoami)
+  - name: Enable docker on boot
+    command: systemctl enable docker
+  
