@@ -1,30 +1,38 @@
 ---
 - name: Configure
-  hosts: localhost
+  hosts: [master, slave]
   become: true
   tasks:
   - name: Test ansible scripts
+    tags: always
     debug:
       msg:
          - "{{ inventory_hostname }}"
          - "{{ ansible_ssh_host }}"
   - name: Update the packages
+    tags: always
     command: apt update
   - name: Install docker
+    tags: always
     command: apt install docker.io=17.12.1-0ubuntu1 -y
   - name: Install python
+    tags: always
     command: apt install python -y
   - name: Do sudoless docker commands
+    tags: always
     command: usermod -aG docker $(whoami)
   - name: Enable docker on boot
+    tags: always
     command: systemctl enable docker
   - name: Reboot remote host
+    tags: always
     become: yes
     become_user: root
     shell: "sleep 5 && reboot"
     async: 1
     poll: 0 
   - name: Wait for the reboot and reconnect 
+    tags: always
     wait_for:
       port: 22
       host: '{{ (ansible_ssh_host|default(ansible_host))|default(inventory_hostname) }}'
@@ -33,22 +41,32 @@
       timeout: 60
     connection: local    
   - name: Retrieve 
+    tags: always
     command: curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
   - name:  Add deb o repo
+    tags: always
     command: apt-add-repository "deb http://apt.kubernetes.io/ kubernetes-xenial main"
   - name: Install Kubernetes
+    tags: always
     command: apt install kubeadm=1.11.9-00 kubelet=1.11.9-00 kubectl=1.11.9-00 kubernetes-cni=0.7.5-00
   - name: Swap
+    tags: always
     command: swapoff -a
   - name: Pull images
+    tags: master
     command: kubeadm config images pull
   - name: Start kubernetes
+    tags: master
     command: "sudo kubeadm init --pod-network-cidr={{ ansible_ssh_host }}/16"
   - name: Make dir
+    tags: master
     command: mkdir -p $HOME/.kube
   - name: Copy default admin.conf
+    tags: master
     command: cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
   - name: Change ownership
+    tags: master
     command: chown $(id -u):$(id -g) $HOME/.kube/config
   - name: Dump command
+    tags: master
     command: kubeadm token create --print-join-command

@@ -4,5 +4,6 @@ FROM nginx
 # Add playbooks to the Docker image
 RUN apt-get update
 RUN apt install ansible -y
+RUN apt install python -y
 COPY ./k8install.yaml /. 
 CMD bash
