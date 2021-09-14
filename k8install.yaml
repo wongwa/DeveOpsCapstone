@@ -7,13 +7,48 @@
     debug:
       msg:
          - "{{ inventory_hostname }}"
+         - "{{ ansible_ssh_host }}"
   - name: Update the packages
     command: apt update
   - name: Install docker
-    command: apt install docker.io=17.12.1-0ubuntu1
-    #command: apt install docker.io -y
+    command: apt install docker.io=17.12.1-0ubuntu1 -y
+  - name: Install python
+    command: apt install python -y
   - name: Do sudoless docker commands
     command: usermod -aG docker $(whoami)
   - name: Enable docker on boot
     command: systemctl enable docker
-  
+  - name: Reboot remote host
+    become: yes
+    become_user: root
+    shell: "sleep 5 && reboot"
+    async: 1
+    poll: 0 
+  - name: Wait for the reboot and reconnect 
+    wait_for:
+      port: 22
+      host: '{{ (ansible_ssh_host|default(ansible_host))|default(inventory_hostname) }}'
+      search_regex: OpenSSH
+      delay: 10
+      timeout: 60
+    connection: local    
+  - name: Retrieve 
+    command: curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+  - name:  Add deb o repo
+    command: apt-add-repository "deb http://apt.kubernetes.io/ kubernetes-xenial main"
+  - name: Install Kubernetes
+    command: apt install kubeadm=1.11.9-00 kubelet=1.11.9-00 kubectl=1.11.9-00 kubernetes-cni=0.7.5-00
+  - name: Swap
+    command: swapoff -a
+  - name: Pull images
+    command: kubeadm config images pull
+  - name: Start kubernetes
+    command: "sudo kubeadm init --pod-network-cidr={{ ansible_ssh_host }}/16"
+  - name: Make dir
+    command: mkdir -p $HOME/.kube
+  - name: Copy default admin.conf
+    command: cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+  - name: Change ownership
+    command: chown $(id -u):$(id -g) $HOME/.kube/config
+  - name: Dump command
+    command: kubeadm token create --print-join-command
