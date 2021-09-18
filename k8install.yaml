@@ -12,15 +12,46 @@
   - name: Update the packages
     tags: always
     command: apt update
+  - name: Remove /usr/share/keyrings/docker-archive-keyring.gpg
+    tags: always
+    file: 
+      path: /usr/share/keyrings/docker-archive-keyring.gpg
+      state: absent
+  - name: Retrieve docker key
+    tags: always
+    get_url:    
+      url: https://download.docker.com/linux/ubuntu/gpg
+      dest: /home/ubuntu/docker.key
+  - name: Get latest docker packages
+    tags: always
+    command: gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg /home/ubuntu/docker.key
+  - name: Creating  /etc/apt/sources.list.d/docker.list file
+    tags: always
+    copy:
+      dest: "/etc/apt/sources.list.d/docker.list"
+      content: deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu   focal stable
+#  - name: Add deb source
+#    tags: always
+#    command: \
+#      echo \
+#      "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \
+#      focal stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+  - name: Add docker packages
+    tags: always
+    command: apt update
   - name: Install docker
     tags: always
-    command: apt install docker.io=17.12.1-0ubuntu1 -y
-  - name: Install python
+    command: apt install docker-ce=5:19.03.15~3-0~ubuntu-focal docker-ce-cli=5:19.03.15~3-0~ubuntu-focal  containerd.io=1.3.9-1 -y
+  - name: Copy docker daemon file
     tags: always
-    command: apt install python -y
+    copy: 
+      src: ./daemon.json
+      dest: /etc/docker
+      owner: ubuntu
+      mode: 0644
   - name: Do sudoless docker commands
     tags: always
-    command: usermod -aG docker $(whoami)
+    command: usermod -aG docker ubuntu
   - name: Enable docker on boot
     tags: always
     command: systemctl enable docker
@@ -38,17 +69,22 @@
       host: '{{ (ansible_ssh_host|default(ansible_host))|default(inventory_hostname) }}'
       search_regex: OpenSSH
       delay: 10
-      timeout: 60
+      timeout: 120
     connection: local    
   - name: Retrieve 
     tags: always
-    command: curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+    get_url:
+      url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+      dest: /home/ubuntu/apt-key.gpg
+  - name: Add apt-key
+    tags: always
+    command: apt-key add /home/ubuntu/apt-key.gpg
   - name:  Add deb o repo
     tags: always
     command: apt-add-repository "deb http://apt.kubernetes.io/ kubernetes-xenial main"
   - name: Install Kubernetes
     tags: always
-    command: apt install kubeadm=1.11.9-00 kubelet=1.11.9-00 kubectl=1.11.9-00 kubernetes-cni=0.7.5-00
+    command: apt install kubeadm=1.20.5-00 kubelet=1.20.5-00 kubectl=1.20.5-00 kubernetes-cni=0.8.7-00 -y -y
   - name: Swap
     tags: always
     command: swapoff -a
@@ -57,16 +93,31 @@
     command: kubeadm config images pull
   - name: Start kubernetes
     tags: master
-    command: "sudo kubeadm init --pod-network-cidr={{ ansible_ssh_host }}/16"
+    command: "kubeadm init --pod-network-cidr=10.244.0.0/16 --ignore-preflight-errors=all"
+    register: start_out
+  - name: dump errors
+    debug: 
+      msg: 
+        - "start_out.stderr_lines"
+        - "start_out.rc"
   - name: Make dir
     tags: master
     command: mkdir -p $HOME/.kube
   - name: Copy default admin.conf
     tags: master
     command: cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
-  - name: Change ownership
+#  - name: Change ownership
+#    tags: master
+#    command: chown $(id -u):$(id -g) $HOME/.kube/config
+  - name: chown to username you login and chmod as required
     tags: master
-    command: chown $(id -u):$(id -g) $HOME/.kube/config
+    file:
+      path: $HOME/.kube/config
+      owner: "ubuntu"
+      group: "ubuntu"
+      mode: 0644
+  - name: Add flannel
+    command: kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
   - name: Dump command
     tags: master
-    command: kubeadm token create --print-join-command
+    command: kubeadm token create --print-join-command 
