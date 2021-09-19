@@ -1,0 +1,13 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ubuntu-all-access-pods
+subjects:
+- kind: User
+  name: ubuntu
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: all-access-pods
+  apiGroup: rbac.authorization.k8s.io
+
